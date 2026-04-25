@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>简历优化 Agent</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #f6f7fb; color: #222; }
+    .container { max-width: 1180px; margin: 0 auto; padding: 28px; }
+    .header { margin-bottom: 20px; }
+    .header h1 { margin: 0 0 8px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .card { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 8px 24px rgba(0,0,0,.06); }
+    textarea { width: 100%; min-height: 260px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 12px; padding: 12px; font-size: 14px; line-height: 1.55; resize: vertical; }
+    button { border: 0; border-radius: 10px; padding: 10px 16px; cursor: pointer; background: #222; color: #fff; font-weight: 600; margin-right: 8px; }
+    button.secondary { background: #e9e9ef; color: #222; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    input[type=file], input[type=text] { margin: 8px 0 12px; width: 100%; }
+    pre { white-space: pre-wrap; background: #111827; color: #e5e7eb; padding: 14px; border-radius: 12px; overflow: auto; }
+    .row { margin-top: 14px; }
+    .muted { color: #666; font-size: 13px; }
+    .score { font-size: 28px; font-weight: 800; }
+    .full { margin-top: 18px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>简历优化 Agent</h1>
+    <div class="muted">上传/粘贴简历 + 输入 JD → 分析匹配度 → 用户确认 → 生成并导出优化简历</div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>1. 简历输入</h2>
+      <input id="file" type="file" accept=".pdf,.docx,.md,.txt" />
+      <button class="secondary" onclick="parseResume()">解析上传文件</button>
+      <p class="muted">也可以直接粘贴简历文本：</p>
+      <textarea id="resume" placeholder="请粘贴原始简历文本，或上传 PDF/DOCX/MD/TXT 后自动填充"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>2. 目标 JD</h2>
+      <textarea id="jd" placeholder="请粘贴目标职位描述 JD"></textarea>
+      <div class="row">
+        <button onclick="analyze()">分析匹配度</button>
+      </div>
+      <p class="muted">Agent 会先输出匹配亮点、主要缺口和优化建议，不会直接改写。</p>
+    </div>
+  </div>
+
+  <div class="card full">
+    <h2>3. 分析结果</h2>
+    <div id="analysisSummary" class="muted">暂无分析结果</div>
+    <pre id="analysis"></pre>
+    <input id="extra" type="text" placeholder="可选：补充优化要求，例如：更偏 AI Agent 岗位，控制在一页半" />
+    <button id="optBtn" onclick="optimize()" disabled>确认并生成优化简历</button>
+  </div>
+
+  <div class="card full">
+    <h2>4. 优化后的简历</h2>
+    <pre id="optimized"></pre>
+    <button id="mdBtn" onclick="download('md')" disabled>导出 Markdown</button>
+    <button id="docxBtn" onclick="download('docx')" disabled>导出 Word</button>
+    <button id="pdfBtn" onclick="download('pdf')" disabled>导出 PDF</button>
+  </div>
+</div>
+<script>
+let sessionId = null;
+
+async function parseResume() {
+  const file = document.getElementById('file').files[0];
+  if (!file) return alert('请先选择文件');
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/parse-resume', { method: 'POST', body: form });
+  const data = await res.json();
+  if (!res.ok) return alert(data.detail || '解析失败');
+  document.getElementById('resume').value = data.resume_text;
+}
+
+async function analyze() {
+  const resume_text = document.getElementById('resume').value.trim();
+  const jd_text = document.getElementById('jd').value.trim();
+  if (!resume_text || !jd_text) return alert('请填写简历和 JD');
+  document.getElementById('analysisSummary').innerHTML = '分析中...';
+  document.getElementById('analysis').textContent = '';
+  const res = await fetch('/api/analyze', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({resume_text, jd_text})
+  });
+  const data = await res.json();
+  if (!res.ok) return alert(data.detail || '分析失败');
+  sessionId = data.session_id;
+  const score = data.analysis.match_score ?? 'N/A';
+  document.getElementById('analysisSummary').innerHTML = `<span class="score">${score}</span> / 100`;
+  document.getElementById('analysis').textContent = JSON.stringify(data.analysis, null, 2);
+  document.getElementById('optBtn').disabled = false;
+}
+
+async function optimize() {
+  if (!sessionId) return alert('请先完成分析');
+  document.getElementById('optimized').textContent = '生成中...';
+  const extra_instruction = document.getElementById('extra').value.trim();
+  const res = await fetch('/api/optimize', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({session_id: sessionId, user_confirmed: true, extra_instruction})
+  });
+  const data = await res.json();
+  if (!res.ok) return alert(data.detail || '生成失败');
+  document.getElementById('optimized').textContent = data.optimized_resume;
+  ['mdBtn','docxBtn','pdfBtn'].forEach(id => document.getElementById(id).disabled = false);
+}
+
+function download(fmt) {
+  if (!sessionId) return;
+  window.location.href = `/api/export/${sessionId}.${fmt}`;
+}
+</script>
+</body>
+</html>
