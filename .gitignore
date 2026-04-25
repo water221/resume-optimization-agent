@@ -4,3 +4,7 @@ __pycache__/
 .venv/
 app/exports/*
 !app/exports/.gitkeep
+.history
+.vscode/
+
+exports/

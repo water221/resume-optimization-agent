@@ -35,6 +35,7 @@
     <div class="card">
       <h2>1. 简历输入</h2>
       <input id="file" type="file" accept=".pdf,.docx,.md,.txt" />
+      <div id="fileStatus" class="muted">未选择文件</div>
       <button class="secondary" onclick="parseResume()">解析上传文件</button>
       <p class="muted">也可以直接粘贴简历文本：</p>
       <textarea id="resume" placeholder="请粘贴原始简历文本，或上传 PDF/DOCX/MD/TXT 后自动填充"></textarea>
@@ -45,6 +46,7 @@
       <textarea id="jd" placeholder="请粘贴目标职位描述 JD"></textarea>
       <div class="row">
         <button onclick="analyze()">分析匹配度</button>
+        <button class="secondary" onclick="clearAll()">清除全部信息</button>
       </div>
       <p class="muted">Agent 会先输出匹配亮点、主要缺口和优化建议，不会直接改写。</p>
     </div>
@@ -69,6 +71,13 @@
 <script>
 let sessionId = null;
 
+document.getElementById('file').addEventListener('change', () => {
+  const file = document.getElementById('file').files[0];
+  document.getElementById('fileStatus').textContent = file
+    ? `已选择：${file.name}`
+    : '未选择文件';
+});
+
 async function parseResume() {
   const file = document.getElementById('file').files[0];
   if (!file) return alert('请先选择文件');
@@ -83,18 +92,32 @@ async function parseResume() {
 async function analyze() {
   const resume_text = document.getElementById('resume').value.trim();
   const jd_text = document.getElementById('jd').value.trim();
+  const source_filename = document.getElementById('file').files[0]?.name || '';
   if (!resume_text || !jd_text) return alert('请填写简历和 JD');
   document.getElementById('analysisSummary').innerHTML = '分析中...';
   document.getElementById('analysis').textContent = '';
   const res = await fetch('/api/analyze', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({resume_text, jd_text})
+    body: JSON.stringify({resume_text, jd_text, source_filename})
   });
   const data = await res.json();
   if (!res.ok) return alert(data.detail || '分析失败');
   sessionId = data.session_id;
   const score = data.analysis.match_score ?? 'N/A';
-  document.getElementById('analysisSummary').innerHTML = `<span class="score">${score}</span> / 100`;
+  const detail = data.analysis.score_details;
+  if (detail) {
+    const llmScore = detail.llm_score ?? 'N/A';
+    const ruleScore = detail.rule_based_score ?? 'N/A';
+    const coverage = detail.coverage_percent ?? 'N/A';
+    const matched = detail.matched_keywords_count ?? 0;
+    const total = detail.jd_keywords_count ?? 0;
+    document.getElementById('analysisSummary').innerHTML = `
+      <div><span class="score">${score}</span> / 100</div>
+      <div class="muted">LLM分: ${llmScore} ｜ 规则分: ${ruleScore} ｜ 关键词覆盖: ${coverage}% (${matched}/${total})</div>
+    `;
+  } else {
+    document.getElementById('analysisSummary').innerHTML = `<span class="score">${score}</span> / 100`;
+  }
   document.getElementById('analysis').textContent = JSON.stringify(data.analysis, null, 2);
   document.getElementById('optBtn').disabled = false;
 }
@@ -116,6 +139,20 @@ async function optimize() {
 function download(fmt) {
   if (!sessionId) return;
   window.location.href = `/api/export/${sessionId}.${fmt}`;
+}
+
+function clearAll() {
+  sessionId = null;
+  document.getElementById('file').value = '';
+  document.getElementById('fileStatus').textContent = '未选择文件';
+  document.getElementById('resume').value = '';
+  document.getElementById('jd').value = '';
+  document.getElementById('extra').value = '';
+  document.getElementById('analysisSummary').textContent = '暂无分析结果';
+  document.getElementById('analysis').textContent = '';
+  document.getElementById('optimized').textContent = '';
+  document.getElementById('optBtn').disabled = true;
+  ['mdBtn','docxBtn','pdfBtn'].forEach(id => document.getElementById(id).disabled = true);
 }
 </script>
 </body>
