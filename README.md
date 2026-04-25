@@ -64,7 +64,21 @@ Export Tool：导出 md / docx / pdf
 - 文件导出：python-docx、reportlab
 - 部署：Docker / docker-compose
 
-## 4. 环境变量配置
+## 4. 当前代码结构（已拆分）
+
+后端已按功能拆分为路由层 + 服务层：
+
+```text
+app/
+   main.py                      # FastAPI 路由入口（轻量编排）
+   services/
+      llm_client.py              # DeepSeek/OpenAI Compatible 客户端封装
+      resume_agent.py            # 分析/优化 Agent 逻辑、评分与会话管理
+      parser.py                  # 简历文件解析（pdf/docx/md/txt）
+      exporter.py                # md/docx/pdf 导出与格式渲染
+```
+
+## 5. 环境变量配置
 
 复制 `.env.example` 为 `.env`：
 
@@ -82,7 +96,7 @@ DEEPSEEK_MODEL=deepseek-chat
 
 > 注意：不要把真实 API Key 提交到 GitHub。请确保 `.env` 已被 `.gitignore` 忽略。
 
-## 5. Docker 启动方式
+## 6. Docker 启动方式
 
 ### 方式一：使用 docker compose
 
@@ -120,7 +134,7 @@ docker run --rm -p 8000:8000 \
 http://localhost:8000
 ```
 
-## 6. 本地开发启动
+## 7. 本地开发启动
 
 ```bash
 python -m venv .venv
@@ -130,7 +144,7 @@ cp .env.example .env
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## 7. 使用流程
+## 8. 使用流程
 
 1. 打开 `http://localhost:8000`
 2. 上传简历文件，或直接粘贴简历文本
@@ -141,7 +155,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 7. 查看生成结果
 8. 按需导出 Markdown / Word / PDF
 
-## 8. API 简要说明
+## 9. API 简要说明
 
 ### 解析简历文件
 
@@ -158,7 +172,8 @@ Content-Type: application/json
 
 {
   "resume_text": "简历文本",
-  "jd_text": "目标 JD"
+   "jd_text": "目标 JD",
+   "source_filename": "可选：上传文件名"
 }
 ```
 
@@ -183,7 +198,7 @@ GET /api/export/{session_id}.docx
 GET /api/export/{session_id}.pdf
 ```
 
-## 9. 基本验收建议
+## 10. 基本验收建议
 
 面试官可按以下方式验收：
 
@@ -195,7 +210,7 @@ GET /api/export/{session_id}.pdf
 6. 点击确认生成，检查改写后的简历是否忠于原始事实
 7. 分别导出 `md`、`docx`、`pdf`，检查文件是否能正常打开
 
-## 10. 后续可扩展方向
+## 11. 后续可扩展方向
 
 - 使用 Redis / PostgreSQL 持久化 session 和历史版本
 - 增加用户可编辑的“事实确认表”，让用户确认可使用事实后再生成简历
